@@ -73,7 +73,7 @@ function generatePDF() {
     })
   })
 
-  axios.post('http://localhost:8080/generate', newEntries, {
+  axios.post('https://uren.dotsoftware.nl/api/generate', newEntries, {
     responseType: 'blob', // Important for handling binary data like PDF
   })
     .then((response) => {
