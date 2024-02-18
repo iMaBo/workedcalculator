@@ -42,7 +42,7 @@ func main() {
 
 	// router.HandleFunc("/entries", GetEntries).Methods("GET")
 	// router.HandleFunc("/entry", CreateEntry).Methods("POST")
-	router.HandleFunc("/generate", GeneratedPdf).Methods("POST")
+	router.HandleFunc("/api/generate", GeneratedPdf).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":1997", handler))
 }
