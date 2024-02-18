@@ -5,7 +5,6 @@ all: build
 
 build:
 	@echo "Building..."
-	@templ generate
 	@go build -o main backend/server.go
 
 # Run the application
