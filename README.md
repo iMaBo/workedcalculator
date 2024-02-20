@@ -1,6 +1,6 @@
 # Project WorkedCalculator
 
-One Paragraph of project description goes here
+Go + Vuejs project to fill in the worked hours and export a PDF file.
 
 ## Getting Started
 
