@@ -15,6 +15,7 @@ type WorkEntry struct {
 	Start      string  `json:"start"`
 	End        string  `json:"end"`
 	TotalHours float64 `json:"totalHours"`
+	Earned     float64 `json:"earned"`
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -57,10 +58,14 @@ func GeneratedPdf(w http.ResponseWriter, r *http.Request) {
 
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 14)
+	pdf.CellFormat(0, 10, "Gewerkte Uren", "0", 1, "C", false, 0, "")
+	pdf.Ln(10)
+
 	pdf.SetFont("Arial", "B", 12)
 
-	header := []string{"Datum", "Start", "Eind", "Gewerkt"}
-	eachColWidth := 45.0
+	header := []string{"Datum", "Start", "Eind", "Gewerkt", "Verdiend"}
+	eachColWidth := 37.5
 	headerHeight := 10.0
 	for _, h := range header {
 		pdf.CellFormat(eachColWidth, headerHeight, h, "1", 0, "C", false, 0, "")
@@ -70,40 +75,92 @@ func GeneratedPdf(w http.ResponseWriter, r *http.Request) {
 	pdf.SetFont("Arial", "", 12) // Reset font for table content
 
 	var totalHours float64
+	var totalKosten float64
 	var entryCountPerPage int = 0
-	var subTotal float64
+	var subTotalUren float64
+	var subTotalKosten float64
 	for _, entry := range entries {
 		if entryCountPerPage >= 24 {
 			// Add subtotal before adding a new page
-			pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal: %.2f", subTotal), "0", 0, "R", false, 0, "")
+			pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal uren: %.2f", subTotalUren), "0", 0, "R", false, 0, "")
+			pdf.Ln(5)
+			pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal verdiensten: %.2f", subTotalKosten), "0", 0, "R", false, 0, "")
 			pdf.AddPage()
 			entryCountPerPage = 0 // Reset entry count for the new page
 			// Re-add the header on the new page
+			pdf.SetFont("Arial", "B", 12)
 			for _, h := range header {
 				pdf.CellFormat(eachColWidth, headerHeight, h, "1", 0, "C", false, 0, "")
 			}
+			pdf.SetFont("Arial", "", 12)
 			pdf.Ln(-1)
-			subTotal = 0
+			subTotalUren = 0
+			subTotalKosten = 0
 		}
 
-		pdf.CellFormat(eachColWidth, 10, entry.Date, "1", 0, "", false, 0, "")
-		pdf.CellFormat(eachColWidth, 10, entry.Start, "1", 0, "", false, 0, "")
-		pdf.CellFormat(eachColWidth, 10, entry.End, "1", 0, "", false, 0, "")
-		pdf.CellFormat(eachColWidth, 10, fmt.Sprintf("%.2f", entry.TotalHours), "1", 0, "", false, 0, "")
+		pdf.CellFormat(eachColWidth, 10, entry.Date, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(eachColWidth, 10, entry.Start, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(eachColWidth, 10, entry.End, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(eachColWidth, 10, fmt.Sprintf("%.2f", entry.TotalHours), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(eachColWidth, 10, fmt.Sprintf("%.2f", entry.Earned), "1", 0, "C", false, 0, "")
 		pdf.Ln(-1)
 		totalHours += entry.TotalHours
-		subTotal += entry.TotalHours
+		totalKosten += entry.Earned
+		subTotalUren += entry.TotalHours
+		subTotalKosten += entry.Earned
 		entryCountPerPage++
 	}
 
 	// Check if we've added any entries to ensure we don't add a subtotal unnecessarily
-	if entryCountPerPage > 0 {
-		pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal: %.2f", subTotal), "0", 0, "R", false, 0, "")
+	if entryCountPerPage > 24 {
+		pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal uren: %.2f", subTotalUren), "0", 0, "R", false, 0, "")
+		pdf.Ln(5)
+		pdf.CellFormat(0, 10, fmt.Sprintf("Subtotaal verdiensten: %.2f", subTotalKosten), "0", 0, "R", false, 0, "")
 		pdf.Ln(5)
 	}
 
 	// Total at the end of the document, ensuring it's always added at the bottom
-	pdf.CellFormat(0, 10, fmt.Sprintf("Totaal: %.2f", totalHours), "0", 0, "R", false, 0, "")
+	pdf.CellFormat(0, 10, fmt.Sprintf("Totaal uren: %.2f", totalHours), "0", 0, "R", false, 0, "")
+	pdf.Ln(5)
+	pdf.CellFormat(0, 10, fmt.Sprintf("Totaal verdiensten: %.2f", totalKosten), "0", 0, "R", false, 0, "")
+
+	// Add total of each month.
+	// Aggregate data by year-month
+	monthlyTotals := make(map[string]struct {
+		TotalHours float64
+		Earned     float64
+	})
+
+	for _, entry := range entries {
+		yearMonth := entry.Date[:7] // Extract YYYY-MM format
+		totals, exists := monthlyTotals[yearMonth]
+		if !exists {
+			totals = struct {
+				TotalHours float64
+				Earned     float64
+			}{0, 0}
+		}
+		totals.TotalHours += entry.TotalHours
+		totals.Earned += entry.Earned
+		monthlyTotals[yearMonth] = totals
+	}
+
+	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 14)
+	pdf.CellFormat(0, 10, "Maandelijkse overzicht", "0", 1, "C", false, 0, "")
+	pdf.Ln(10)
+
+	pdf.SetFont("Arial", "B", 12)
+	pdf.CellFormat(40, 10, "Maand", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(60, 10, "Totaal uur", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(60, 10, "Totaal verdiend", "1", 1, "C", false, 0, "")
+
+	pdf.SetFont("Arial", "", 12)
+	for month, totals := range monthlyTotals {
+		pdf.CellFormat(40, 10, month, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(60, 10, fmt.Sprintf("%.2f", totals.TotalHours), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(60, 10, fmt.Sprintf("%.2f", totals.Earned), "1", 1, "C", false, 0, "")
+	}
 
 	// Output PDF
 	err = pdf.Output(w)
